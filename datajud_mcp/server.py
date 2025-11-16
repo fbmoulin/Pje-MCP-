@@ -48,10 +48,13 @@ mcp = FastMCP(
 )
 
 # Configurações da API
-API_KEY = os.getenv(
-    "DATAJUD_API_KEY",
-    "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
-)
+API_KEY = os.getenv("DATAJUD_API_KEY")
+if not API_KEY:
+    logger.error(
+        "DATAJUD_API_KEY environment variable not set. "
+        "DataJud queries will fail. Please set DATAJUD_API_KEY with your API key."
+    )
+
 BASE_URL = os.getenv(
     "DATAJUD_BASE_URL",
     "https://api-publica.datajud.cnj.jus.br"

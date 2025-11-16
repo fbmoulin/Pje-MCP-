@@ -100,10 +100,34 @@ class SituacaoProcesso(str, Enum):
 
 def initialize_certificate() -> None:
     """
-    Inicializa o gerenciador de certificados a partir das variáveis de ambiente
+    Inicializa o gerenciador de certificados a partir das variáveis de ambiente.
+
+    Creates global cert_manager and cert_files for use in authenticated PJE requests.
+    Validates certificate and logs expiry information. For A1 certificates, creates
+    temporary PEM files that must be cleaned up with cleanup_certificate().
+
+    Environment Variables:
+        PJE_CERT_TYPE: "A1" for local PFX file or "A3" for smart card/cloud
+        PJE_CERT_PATH: Path to PFX file (required for A1)
+        PJE_CERT_PASSWORD: Certificate password (required for A1)
+        PJE_CERT_THUMBPRINT: Certificate thumbprint (optional for A3)
+
+    Side Effects:
+        - Sets global cert_manager to configured CertificateManager instance
+        - Sets global cert_files to (cert_path, key_path) tuple for A1 certificates
+        - Logs certificate subject, expiry date, and days until expiration
 
     Raises:
-        CertificateError: Se houver erro ao carregar certificado
+        CertificateError: If certificate cannot be loaded, is invalid, expired,
+            or required environment variables are missing
+
+    Example:
+        >>> # Set environment variables first
+        >>> os.environ['PJE_CERT_TYPE'] = 'A1'
+        >>> os.environ['PJE_CERT_PATH'] = '/path/to/cert.pfx'
+        >>> os.environ['PJE_CERT_PASSWORD'] = 'secret'
+        >>> initialize_certificate()
+        >>> # cert_manager is now ready to use
     """
     global cert_manager, cert_files
 
@@ -138,7 +162,29 @@ def initialize_certificate() -> None:
 
 def cleanup_certificate() -> None:
     """
-    Limpa recursos do certificado (arquivos temporários)
+    Limpa recursos do certificado removendo arquivos temporários.
+
+    Deletes temporary PEM files created by initialize_certificate() for A1 certificates.
+    Safe to call even if no temporary files exist. Should be called when server
+    shuts down or when certificate is no longer needed.
+
+    Side Effects:
+        - Deletes temporary certificate and key PEM files from filesystem
+        - Sets global cert_files to None
+        - Logs success or warnings if cleanup fails
+
+    Warning:
+        After calling this function, cert_files will be None and authenticated
+        requests will fail until initialize_certificate() is called again.
+
+    Note:
+        For A3 certificates (smart card/cloud), this function has no effect
+        since they don't use temporary files.
+
+    Example:
+        >>> initialize_certificate()
+        >>> # ... use certificate for requests ...
+        >>> cleanup_certificate()  # Clean up before exit
     """
     global cert_files
 
@@ -228,8 +274,14 @@ async def fazer_requisicao_pje(
             try:
                 return response.json()
             except json.JSONDecodeError:
-                # Se não for JSON, retornar texto
-                return {"content": response.text, "status_code": response.status_code}
+                # Resposta não é JSON válido - retornar estrutura de erro consistente
+                logger.warning(f"Non-JSON response from {url}: {response.text[:100]}")
+                return {
+                    "error": True,
+                    "message": "Response was not valid JSON",
+                    "raw_content": response.text,
+                    "status_code": response.status_code
+                }
 
         except httpx.HTTPStatusError as e:
             logger.error(f"Erro HTTP {e.response.status_code}: {e.response.text}")

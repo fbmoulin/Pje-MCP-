@@ -256,15 +256,22 @@ class CertificateManager:
             logger.exception("Erro ao carregar certificado A3")
             raise CertificateError(f"Erro ao carregar certificado A3: {str(e)}") from e
 
-    def get_certificate_info(self) -> Optional[CertificateInfo]:
+    def get_certificate_info(self) -> CertificateInfo:
         """
         Obtém informações do certificado carregado
 
         Returns:
-            CertificateInfo com dados do certificado, ou None se nenhum certificado carregado
+            CertificateInfo: Dados completos do certificado incluindo validade,
+                emissor, subject, thumbprint e dias até expiração
 
         Raises:
             CertificateError: Se nenhum certificado estiver carregado
+
+        Example:
+            >>> manager = CertificateManager("A1")
+            >>> manager.load_a1_certificate("cert.pfx", "password")
+            >>> info = manager.get_certificate_info()
+            >>> print(f"Valid until: {info.not_valid_after}")
         """
         if self.certificate is None:
             raise CertificateError("Nenhum certificado carregado")
@@ -387,12 +394,12 @@ class CertificateManager:
             # Limpar em caso de erro
             try:
                 os.unlink(cert_file.name)
-            except:
-                pass
+            except OSError as cleanup_error:
+                logger.warning(f"Failed to delete temp cert file: {cleanup_error}")
             try:
                 os.unlink(key_file.name)
-            except:
-                pass
+            except OSError as cleanup_error:
+                logger.warning(f"Failed to delete temp key file: {cleanup_error}")
             raise CertificateError(f"Erro ao criar arquivos temporários: {str(e)}") from e
 
     def __repr__(self) -> str:

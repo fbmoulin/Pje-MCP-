@@ -184,8 +184,8 @@ class SessionManager:
                     age = datetime.now() - created
                     info['age_hours'] = age.total_seconds() / 3600
                     info['age_human'] = self._format_timedelta(age)
-                except:
-                    pass
+                except (ValueError, KeyError) as e:
+                    logger.debug(f"Failed to parse session age: {e}")
 
         return info
 
