@@ -29,6 +29,16 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from common import (
+    get_int_env,
+    DEFAULT_TIMEOUT_SECONDS,
+    MIN_TIMEOUT_SECONDS,
+    MAX_TIMEOUT_SECONDS,
+    DEFAULT_RETRY_ATTEMPTS,
+    MIN_RETRY_ATTEMPTS,
+    MAX_RETRY_ATTEMPTS,
+    ICONS,
+)
 from .cert_manager import (
     CertificateManager,
     CertificateError,
@@ -54,58 +64,11 @@ mcp = FastMCP(
     instructions="Servidor MCP para PJE do TJES com autenticação por certificado digital"
 )
 
-# Função auxiliar para validação de variáveis de ambiente numéricas
-def get_int_env(var_name: str, default: int, min_value: int = 1, max_value: int = None) -> int:
-    """
-    Obtém variável de ambiente inteira com validação robusta
-
-    Args:
-        var_name: Nome da variável de ambiente
-        default: Valor padrão se não configurado
-        min_value: Valor mínimo permitido
-        max_value: Valor máximo permitido (opcional)
-
-    Returns:
-        Valor inteiro validado
-    """
-    value_str = os.getenv(var_name)
-
-    if value_str is None:
-        return default
-
-    try:
-        value = int(value_str)
-
-        # Validar limites
-        if value < min_value:
-            logger.warning(
-                f"{var_name}={value} é menor que o mínimo permitido ({min_value}). "
-                f"Usando {min_value}."
-            )
-            return min_value
-
-        if max_value is not None and value > max_value:
-            logger.warning(
-                f"{var_name}={value} é maior que o máximo permitido ({max_value}). "
-                f"Usando {max_value}."
-            )
-            return max_value
-
-        return value
-
-    except (ValueError, TypeError) as e:
-        logger.warning(
-            f"{var_name}='{value_str}' não é um número válido. "
-            f"Usando valor padrão: {default}. Erro: {e}"
-        )
-        return default
-
-
 # Configurações
 PJE_BASE_URL = os.getenv("PJE_BASE_URL", "https://sistemas.tjes.jus.br/pje")
 PJE_2G_BASE_URL = os.getenv("PJE_2G_BASE_URL", "https://sistemas.tjes.jus.br/pje2g")
-TIMEOUT = get_int_env("PJE_TIMEOUT_SECONDS", default=60, min_value=5, max_value=300)
-RETRY_ATTEMPTS = get_int_env("PJE_RETRY_ATTEMPTS", default=3, min_value=1, max_value=10)
+TIMEOUT = get_int_env("PJE_TIMEOUT_SECONDS", default=DEFAULT_TIMEOUT_SECONDS, min_value=MIN_TIMEOUT_SECONDS, max_value=MAX_TIMEOUT_SECONDS)
+RETRY_ATTEMPTS = get_int_env("PJE_RETRY_ATTEMPTS", default=DEFAULT_RETRY_ATTEMPTS, min_value=MIN_RETRY_ATTEMPTS, max_value=MAX_RETRY_ATTEMPTS)
 
 # Gerenciador de certificados global
 cert_manager: Optional[CertificateManager] = None
@@ -348,7 +311,7 @@ async def pje_certificate_status() -> str:
         info = cert_manager.get_certificate_info()
         is_valid, message = cert_manager.validate_certificate()
 
-        status_icon = "✅" if is_valid else "❌"
+        status_icon = ICONS['success'] if is_valid else ICONS['error']
 
         resultado = f"""
 {status_icon} Status do Certificado Digital
@@ -372,7 +335,7 @@ Status: {message}
 
     except Exception as e:
         logger.exception("Erro ao verificar status do certificado")
-        return f"❌ Erro ao verificar certificado: {str(e)}"
+        return f"{ICONS['error']} Erro ao verificar certificado: {str(e)}"
 
 
 @mcp.tool()
@@ -409,7 +372,7 @@ async def pje_search_process(numero_processo: str, grau: str = "1") -> str:
         )
 
         if resposta.get("error"):
-            return f"❌ Erro ao buscar processo: {resposta.get('message', 'Erro desconhecido')}"
+            return f"{ICONS['error']} Erro ao buscar processo: {resposta.get('message', 'Erro desconhecido')}"
 
         # Formatar resultado
         resultado = f"🔍 Busca de Processo - {grau}º Grau\n\n"
@@ -422,10 +385,10 @@ async def pje_search_process(numero_processo: str, grau: str = "1") -> str:
         return resultado
 
     except CertificateError as e:
-        return f"❌ Erro de certificado: {str(e)}"
+        return f"{ICONS['error']} Erro de certificado: {str(e)}"
     except Exception as e:
         logger.exception("Erro ao buscar processo")
-        return f"❌ Erro ao buscar processo: {str(e)}"
+        return f"{ICONS['error']} Erro ao buscar processo: {str(e)}"
 
 
 @mcp.tool()
@@ -474,7 +437,7 @@ async def pje_list_processes(
         )
 
         if resposta.get("error"):
-            return f"❌ Erro ao listar processos: {resposta.get('message')}"
+            return f"{ICONS['error']} Erro ao listar processos: {resposta.get('message')}"
 
         # Processar resultados
         processos = resposta.get("result", [])
@@ -493,7 +456,7 @@ async def pje_list_processes(
 
     except Exception as e:
         logger.exception("Erro ao listar processos")
-        return f"❌ Erro: {str(e)}"
+        return f"{ICONS['error']} Erro: {str(e)}"
 
 
 @mcp.tool()
@@ -522,7 +485,7 @@ async def pje_get_movements(numero_processo: str, grau: str = "1") -> str:
         )
 
         if resposta.get("error"):
-            return f"❌ Erro: {resposta.get('message')}"
+            return f"{ICONS['error']} Erro: {resposta.get('message')}"
 
         movimentos = resposta.get("result", [])
 
@@ -538,7 +501,7 @@ async def pje_get_movements(numero_processo: str, grau: str = "1") -> str:
 
     except Exception as e:
         logger.exception("Erro ao consultar movimentações")
-        return f"❌ Erro: {str(e)}"
+        return f"{ICONS['error']} Erro: {str(e)}"
 
 
 @mcp.tool()
@@ -567,7 +530,7 @@ async def pje_list_documents(numero_processo: str, grau: str = "1") -> str:
         )
 
         if resposta.get("error"):
-            return f"❌ Erro: {resposta.get('message')}"
+            return f"{ICONS['error']} Erro: {resposta.get('message')}"
 
         documentos = resposta.get("result", [])
 
@@ -592,7 +555,7 @@ async def pje_list_documents(numero_processo: str, grau: str = "1") -> str:
 
     except Exception as e:
         logger.exception("Erro ao listar documentos")
-        return f"❌ Erro: {str(e)}"
+        return f"{ICONS['error']} Erro: {str(e)}"
 
 
 @mcp.tool()
@@ -620,7 +583,7 @@ async def pje_list_classes(grau: str = "1") -> str:
         )
 
         if resposta.get("error"):
-            return f"❌ Erro: {resposta.get('message')}"
+            return f"{ICONS['error']} Erro: {resposta.get('message')}"
 
         classes = resposta.get("result", [])
 
@@ -639,7 +602,7 @@ async def pje_list_classes(grau: str = "1") -> str:
 
     except Exception as e:
         logger.exception("Erro ao listar classes")
-        return f"❌ Erro: {str(e)}"
+        return f"{ICONS['error']} Erro: {str(e)}"
 
 
 @mcp.tool()
@@ -667,7 +630,7 @@ async def pje_list_organs(grau: str = "1") -> str:
         )
 
         if resposta.get("error"):
-            return f"❌ Erro: {resposta.get('message')}"
+            return f"{ICONS['error']} Erro: {resposta.get('message')}"
 
         orgaos = resposta.get("result", [])
 
@@ -683,7 +646,7 @@ async def pje_list_organs(grau: str = "1") -> str:
 
     except Exception as e:
         logger.exception("Erro ao listar órgãos")
-        return f"❌ Erro: {str(e)}"
+        return f"{ICONS['error']} Erro: {str(e)}"
 
 
 @mcp.tool()
@@ -711,7 +674,7 @@ async def pje_list_subjects(grau: str = "1") -> str:
         )
 
         if resposta.get("error"):
-            return f"❌ Erro: {resposta.get('message')}"
+            return f"{ICONS['error']} Erro: {resposta.get('message')}"
 
         assuntos = resposta.get("result", [])
 
@@ -730,7 +693,7 @@ async def pje_list_subjects(grau: str = "1") -> str:
 
     except Exception as e:
         logger.exception("Erro ao listar assuntos")
-        return f"❌ Erro: {str(e)}"
+        return f"{ICONS['error']} Erro: {str(e)}"
 
 
 # ========================================
@@ -797,7 +760,7 @@ async def pje_authenticate_safe_id() -> str:
         session_info = session_manager.get_session_info()
         if session_info['valid']:
             return f"""
-✅ Sessão já está ativa!
+{ICONS['success']} Sessão já está ativa!
 
 Não é necessário autenticar novamente.
 Idade da sessão: {session_info.get('age_human', 'N/A')}
@@ -849,7 +812,7 @@ IMPORTANTE:
 
     except Exception as e:
         logger.exception("Erro ao preparar autenticação")
-        return f"❌ Erro: {str(e)}"
+        return f"{ICONS['error']} Erro: {str(e)}"
 
 
 @mcp.tool()
@@ -878,8 +841,8 @@ async def pje_clear_session() -> str:
         session_info = session_manager.get_session_info()
 
         if not session_info['exists']:
-            return """
-ℹ️  Nenhuma sessão encontrada
+            return f"""
+{ICONS['info']} Nenhuma sessão encontrada
 
 Não há sessão para remover.
 A próxima autenticação criará uma nova sessão.
@@ -888,8 +851,8 @@ A próxima autenticação criará uma nova sessão.
         # Remover sessão
         session_manager.clear_session()
 
-        resultado = """
-✅ Sessão removida com sucesso
+        resultado = f"""
+{ICONS['success']} Sessão removida com sucesso
 
 Detalhes da sessão removida:
 """

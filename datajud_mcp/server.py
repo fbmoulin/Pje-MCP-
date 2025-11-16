@@ -26,6 +26,14 @@ from enum import Enum
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from common import (
+    get_int_env,
+    DEFAULT_TIMEOUT_SECONDS,
+    MIN_TIMEOUT_SECONDS,
+    MAX_TIMEOUT_SECONDS,
+    ICONS,
+)
+
 # Configuração de logging
 logging.basicConfig(
     level=logging.INFO,
@@ -39,53 +47,6 @@ mcp = FastMCP(
     instructions="Servidor MCP para consultas à API pública do DataJud (CNJ) - Tribunal de Justiça do Espírito Santo"
 )
 
-# Função auxiliar para validação de variáveis de ambiente numéricas
-def get_int_env(var_name: str, default: int, min_value: int = 1, max_value: int = None) -> int:
-    """
-    Obtém variável de ambiente inteira com validação robusta
-
-    Args:
-        var_name: Nome da variável de ambiente
-        default: Valor padrão se não configurado
-        min_value: Valor mínimo permitido
-        max_value: Valor máximo permitido (opcional)
-
-    Returns:
-        Valor inteiro validado
-    """
-    value_str = os.getenv(var_name)
-
-    if value_str is None:
-        return default
-
-    try:
-        value = int(value_str)
-
-        # Validar limites
-        if value < min_value:
-            logger.warning(
-                f"{var_name}={value} é menor que o mínimo permitido ({min_value}). "
-                f"Usando {min_value}."
-            )
-            return min_value
-
-        if max_value is not None and value > max_value:
-            logger.warning(
-                f"{var_name}={value} é maior que o máximo permitido ({max_value}). "
-                f"Usando {max_value}."
-            )
-            return max_value
-
-        return value
-
-    except (ValueError, TypeError) as e:
-        logger.warning(
-            f"{var_name}='{value_str}' não é um número válido. "
-            f"Usando valor padrão: {default}. Erro: {e}"
-        )
-        return default
-
-
 # Configurações da API
 API_KEY = os.getenv(
     "DATAJUD_API_KEY",
@@ -96,7 +57,7 @@ BASE_URL = os.getenv(
     "https://api-publica.datajud.cnj.jus.br"
 )
 TRIBUNAL_ALIAS = os.getenv("DATAJUD_TRIBUNAL_ALIAS", "tjes")
-TIMEOUT = get_int_env("DATAJUD_TIMEOUT_SECONDS", default=30, min_value=5, max_value=120)
+TIMEOUT = get_int_env("DATAJUD_TIMEOUT_SECONDS", default=DEFAULT_TIMEOUT_SECONDS, min_value=MIN_TIMEOUT_SECONDS, max_value=MAX_TIMEOUT_SECONDS)
 
 
 class TipoOrdenacao(str, Enum):
@@ -329,7 +290,7 @@ async def datajud_query_process(numero_processo: str) -> str:
         total = extrair_total(resposta)
 
         if total == 0:
-            return f"❌ Processo {numero_processo} não encontrado no DataJud/TJES"
+            return f"{ICONS['error']} Processo {numero_processo} não encontrado no DataJud/TJES"
 
         # Formatar resultado
         processo = hits[0]
@@ -342,10 +303,10 @@ async def datajud_query_process(numero_processo: str) -> str:
         return resultado
 
     except ValueError as e:
-        return f"❌ Erro de validação: {str(e)}"
+        return f"{ICONS['error']} Erro de validação: {str(e)}"
     except Exception as e:
         logger.exception("Erro ao consultar processo")
-        return f"❌ Erro ao consultar processo: {str(e)}"
+        return f"{ICONS['error']} Erro ao consultar processo: {str(e)}"
 
 
 @mcp.tool()
@@ -394,7 +355,7 @@ async def datajud_search_by_class(
         total = extrair_total(resposta)
 
         if total == 0:
-            return f"❌ Nenhum processo encontrado para classe {classe_codigo}"
+            return f"{ICONS['error']} Nenhum processo encontrado para classe {classe_codigo}"
 
         # Formatar resultados
         resultado = f"📊 Encontrados {total} processos (mostrando {len(hits)}):\n\n"
@@ -409,7 +370,7 @@ async def datajud_search_by_class(
 
     except Exception as e:
         logger.exception("Erro ao buscar por classe")
-        return f"❌ Erro ao buscar processos: {str(e)}"
+        return f"{ICONS['error']} Erro ao buscar processos: {str(e)}"
 
 
 @mcp.tool()
@@ -458,7 +419,7 @@ async def datajud_search_by_date_range(
         total = extrair_total(resposta)
 
         if total == 0:
-            return f"❌ Nenhum processo encontrado entre {data_inicio} e {data_fim}"
+            return f"{ICONS['error']} Nenhum processo encontrado entre {data_inicio} e {data_fim}"
 
         # Formatar resultados
         resultado = f"📅 Processos entre {data_inicio} e {data_fim}\n"
@@ -473,10 +434,10 @@ async def datajud_search_by_date_range(
         return resultado
 
     except ValueError as e:
-        return f"❌ Erro de validação: {str(e)}"
+        return f"{ICONS['error']} Erro de validação: {str(e)}"
     except Exception as e:
         logger.exception("Erro ao buscar por data")
-        return f"❌ Erro ao buscar processos: {str(e)}"
+        return f"{ICONS['error']} Erro ao buscar processos: {str(e)}"
 
 
 @mcp.tool()
@@ -504,7 +465,7 @@ async def datajud_advanced_search(
         try:
             query = json.loads(query_json)
         except json.JSONDecodeError as e:
-            return f"❌ JSON inválido: {str(e)}"
+            return f"{ICONS['error']} JSON inválido: {str(e)}"
 
         # Fazer requisição
         resposta = await fazer_requisicao_datajud(query, size=limit)
@@ -514,7 +475,7 @@ async def datajud_advanced_search(
         total = extrair_total(resposta)
 
         if total == 0:
-            return "❌ Nenhum resultado encontrado para a query fornecida"
+            return f"{ICONS['error']} Nenhum resultado encontrado para a query fornecida"
 
         # Formatar resultados
         resultado = f"🔍 Busca Avançada\n"
@@ -534,7 +495,7 @@ async def datajud_advanced_search(
 
     except Exception as e:
         logger.exception("Erro na busca avançada")
-        return f"❌ Erro na busca: {str(e)}"
+        return f"{ICONS['error']} Erro na busca: {str(e)}"
 
 
 @mcp.tool()
@@ -563,7 +524,7 @@ async def datajud_get_statistics(
 
         if mes:
             if mes < 1 or mes > 12:
-                return f"❌ Mês inválido: {mes}. Use valores entre 1 e 12"
+                return f"{ICONS['error']} Mês inválido: {mes}. Use valores entre 1 e 12"
             data_inicio = f"{ano}-{mes:02d}-01"
             # Último dia do mês
             if mes == 12:
@@ -608,7 +569,7 @@ no DataJud. Valores podem não refletir a totalidade dos processos.
 
     except Exception as e:
         logger.exception("Erro ao obter estatísticas")
-        return f"❌ Erro ao obter estatísticas: {str(e)}"
+        return f"{ICONS['error']} Erro ao obter estatísticas: {str(e)}"
 
 
 # ========================================
