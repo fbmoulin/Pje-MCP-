@@ -1,0 +1,53 @@
+{
+  "_comment": "Configuração para macOS - TJES PJE MCP Server",
+  "_instructions": "Copie este arquivo para ~/Library/Application Support/Claude/claude_desktop_config.json",
+  "_path_adjustment": "Ajuste o caminho 'cwd' abaixo para o seu diretório do projeto",
+
+  "mcpServers": {
+    "playwright-tjes": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "env": {
+        "BROWSER": "chromium",
+        "HEADLESS": "false"
+      }
+    },
+    "tjes-pje": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "tjes_pje_mcp.server"
+      ],
+      "cwd": "${HOME}/projetos/mcp_pje",
+      "env": {
+        "PJE_BASE_URL": "https://sistemas.tjes.jus.br/pje",
+        "PJE_2G_BASE_URL": "https://sistemas.tjes.jus.br/pje2g",
+        "PJE_CERT_TYPE": "A1",
+        "PJE_CERT_PATH": "${HOME}/.certificates/tjes_pje.pfx",
+        "PJE_CERT_PASSWORD": "${PJE_CERT_PASSWORD}",
+        "PJE_TIMEOUT_SECONDS": "60",
+        "PJE_RETRY_ATTEMPTS": "3",
+        "PJE_SESSION_MAX_AGE_HOURS": "8",
+        "LOG_LEVEL": "INFO"
+      }
+    },
+    "datajud-tjes": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "datajud_mcp.server"
+      ],
+      "cwd": "${HOME}/projetos/mcp_pje",
+      "env": {
+        "DATAJUD_API_KEY": "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
+        "DATAJUD_BASE_URL": "https://api-publica.datajud.cnj.jus.br",
+        "DATAJUD_TRIBUNAL_ALIAS": "tjes",
+        "DATAJUD_TIMEOUT_SECONDS": "30",
+        "DATAJUD_CACHE_ENABLED": "true",
+        "DATAJUD_CACHE_TTL_SECONDS": "3600",
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  },
+  "globalShortcut": "Cmd+Space"
+}
